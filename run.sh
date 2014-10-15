@@ -4,7 +4,7 @@ NODES=""
 for (( i=0; i<$N; i++ ))
 do
     NODES+=" bully$i@`hostname`"
-    erl -pa out/production/bully -name "bully$i" -s bully start ${NODES} -noshell &
+    erl -pa out/production/bully -name "bully$i@`hostname`" -s bully start ${NODES} -noshell &
     sleep 1
 done
 read
