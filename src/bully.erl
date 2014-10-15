@@ -12,24 +12,39 @@
 %% API
 -export([start/1]).
 
+-define(ELECTION_MESSAGE, election).
+-define(ELECTION_MESSAGE_RESPONSE, ok).
+-define(COORDINATOR_MESSAGE, imtheboss).
+-define(RESPONSE_TIMEOUT, 20).
 
--record(state, {knownnodes = []}).
-
+-record(state, {timeout = infinity, knownnodes = [], coordinator = node()}).
 
 start(Nodes) ->
   register(?MODULE, self()),
-  io:format("Node ~s has a PId of ~s.~n", [node(), os:getpid()]),
-  loop(greetNodes(#state{knownnodes = Nodes})).
+  io:format("Node ~s has a PId of ~s.~n", [node(), os:getpid()]).
+%%   loop(greetNodes(#state{knownnodes = Nodes})).
 
 loop(State) ->
+  Timeout = State#state.timeout,
   NewState = receive
-               {_Msg, Node} ->
-                 addKnownNode(State,Node)
+               {?ELECTION_MESSAGE, Node} -> handleElectionMessage(State, Node);
+               {?ELECTION_MESSAGE_RESPONSE, Node} -> waitForCoordinatorMessage(State);
+               {?COORDINATOR_MESSAGE, Node} -> setCoordinator(State, Node)
              after
-               infinity -> State
+               Timeout -> becomeCoordinator(State)
              end,
   io:format("~s reached loop end~n", [node()]),
   loop(NewState).
+
+handleElectionMessage(State, Node) ->
+  State.
+
+waitForCoordinatorMessage(State) ->
+  NewState = State#state{timeout = ?RESPONSE_TIMEOUT},
+  NewState.
+
+setCoordinator(State, Node) ->
+  State.
 
 log(State, Node) ->
   io:format("~s received something from node ~s~n", [node(), atom_to_list(Node)]),
@@ -40,11 +55,8 @@ addKnownNode(State, Node) ->
   NewState = #state{knownnodes = lists:append([State#state.knownnodes,[Node]])},
   NewState.
 
-greetNodes(#state{knownnodes = Nodes} = State) ->
-  lists:foreach(fun sendMessageToNode/1, Nodes),
-  State#state{knownnodes = Nodes}.
 
-sendMessageToNode(Node) ->
-  io:format("Node ~s is attempting to send message to node ~s~n", [node(), atom_to_list(Node)]),
-  {?MODULE, Node} ! {hithere, node()}.
+sendMessageToNode(Node, Message) ->
+  io:format("Node ~s is sending message ~s to node ~s~n", [node(), Message, atom_to_list(Node)]),
+  {?MODULE, Node} ! {Message, node()}.
 
